@@ -1,5 +1,5 @@
 NAME = pmserver
-LIBS = -lc -lportmidi
+LIBS = -lc -lc++ -lportmidi
 LDFLAGS += $(LIBS)
 
 SRC = $(wildcard src/*.cpp)

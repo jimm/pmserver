@@ -1,8 +1,12 @@
-#include <stdio.h>
+#include <iostream>
+#include <iomanip>
+#include <stdio.h>              // NEEDED?
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <libgen.h>
+#include <getopt.h>
 #include "portmidi.h"
 #include "consts.h"
 
@@ -15,6 +19,14 @@
 // 10 milliseconds, in nanoseconds
 #define SLEEP_NANOSECS 1e7
 
+using std::cout;
+using std::cerr;
+using std::endl;
+using std::setw;
+using std::setfill;
+using std::hex;
+using std::flush;
+
 typedef unsigned char byte;
 
 typedef enum SysexState {
@@ -23,14 +35,25 @@ typedef enum SysexState {
   SYSEX_DONE
 } SysexState;
 
+struct opts {
+  bool list_devices;
+  int input_port;
+  int output_port;
+} opts;
+
 void list_devices(const char *title, const PmDeviceInfo *infos[], int num_devices) {
-  printf("%s:\n", title);
-  for (int i = 0; i < num_devices; ++i)
-    if (infos[i] != 0) {
-      const char *name = infos[i]->name;
-      const char *q = (name[0] == ' ' || name[strlen(name)-1] == ' ') ? "\"" : "";
-      printf("  %2d: %s%s%s%s\n", i, q, name, q, infos[i]->opened ? " (open)" : "");
-    }
+  cout << title << ":" << endl;
+  for (int i = 0; i < num_devices; ++i) {
+    if (infos[i] == 0)
+      continue;
+
+    const char *name = infos[i]->name;
+    const char *q = (name[0] == ' ' || name[strlen(name)-1] == ' ') ? "\"" : "";
+    cout << "   " << setw(2) << i << ": "
+         << q << name << q
+         << (infos[i]->opened ? " (open)" : "")
+         << endl;
+  }
 }
 
 void list_all_devices() {
@@ -133,16 +156,16 @@ SysexState read_and_process_sysex(PortMidiStream *output, SysexState sysex_state
       PmMessage msg = events[i].message;
       byte b = ((byte *)(void *)&msg)[j];
       if (sysex_state == SYSEX_PROCESSING) {
-        printf(" %02x", b);
+        cout << " " << setfill('0') << setw(2) << hex << b;
         if (b == EOX) {
-          printf("\n");
+          cout << endl;
           return SYSEX_DONE;
         }
       }
       else if (b == SYSEX) {
         if (sysex_state != SYSEX_WAITING)
-          fprintf(stderr, "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte\n");
-        printf(" %02x", b);
+          cerr << "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte" << endl;
+        cout << " " << setfill('0') << setw(2) << hex << b;
         sysex_state = SYSEX_PROCESSING;
       }
     }
@@ -157,9 +180,8 @@ void receive_and_print_bytes(PortMidiStream *output) {
 
   while (sysex_state != SYSEX_DONE) {
     if (difftime(time(0), start_time) >= WAIT_FOR_SYSEX_TIMEOUT_SECS) {
-      fprintf(stderr,
-              "it's been %d seconds and I haven't seen a SYSEX message\n",
-              WAIT_FOR_SYSEX_TIMEOUT_SECS);
+      cerr << "it's been " << WAIT_FOR_SYSEX_TIMEOUT_SECS
+           << "seconds and I haven't seen a SYSEX message" << endl;
       return;
     }
     if (Pm_Poll(output) == TRUE)
@@ -172,30 +194,41 @@ void receive_and_print_bytes(PortMidiStream *output) {
 }
 
 void help() {
-  printf("list                  List all devices\n");
-  printf("open input/output N   Open input or output port\n");
-  printf("send file | b [b...]  Send file or bytes to open input; all b must be hex\n");
-  printf("receive               Receive and print bytes from open output\n");
-  printf("x file | b [b...]     Send file or bytes, then receive and print\n");
-  printf("p words...            Print words (good for scripts)\n");
-  printf("help                  This help\n");
-  printf("quit                  Quit\n");
-  printf("\n");
-  printf("all commands can be entered using the shortest unique prefix (1 char)\n");
+  cout << "list                  List all devices" << endl
+       << "open input/output N   Open input or output port" << endl
+       << "send file | b [b...]  Send file or bytes to open input; all b must be hex" << endl
+       << "receive               Receive and print bytes from open output" << endl
+       << "x file | b [b...]     Send file or bytes, then receive and print" << endl
+       << "p words...            Print words (good for scripts)" << endl
+       << "help                  This help" << endl
+       << "quit                  Quit" << endl
+       << endl
+       << "all commands can be entered using the shortest unique prefix (1 char)" << endl;
 }
 
-void run() {
+void run(struct opts *opts) {
   char line[LINE_BUFSIZ];
   char *string, **ap, *words[MAX_WORDS];
   int port, err;
   PortMidiStream *input = 0, *output = 0;
 
+  // TODO check error
+  if (opts->input_port >= 0) {
+    err = Pm_OpenInput(&input, opts->input_port, 0, MIDI_BUFSIZ, 0, 0);
+    if (err != 0)
+      cerr << "error opening input port " << opts->input_port << endl;
+  }
+  if (opts->output_port >= 0) {
+    err = Pm_OpenOutput(&output, opts->output_port, 0, 128, 0, 0, 0);
+    if (err != 0)
+      cerr << "error opening input port " << opts->output_port << endl;
+  }
+
   while (1) {
-    printf("> ");
-    fflush(stdout);
+    cout << "> " << flush;
     if (fgets(line, LINE_BUFSIZ, stdin) == 0) {
       if (feof(stdin)) {
-        printf("\n");
+        cout << endl;
         return;
       }
       continue;
@@ -203,9 +236,11 @@ void run() {
     line[strlen(line) - 1] = 0;
     string = line;
     for (ap = words; (*ap = strsep(&string, " ")) != 0; )
-      if (**ap != 0)
+      if (**ap != 0)            // skip empty entries (two spaces in a row)
         if (++ap >= &words[MAX_WORDS])
           break;
+    if (ap == words || words[0][0] == '#') // if empty line or comment, done
+      continue;
     *ap = 0;
 
     switch (words[0][0]) {
@@ -214,7 +249,7 @@ void run() {
       break;
     case 'o':
       if (words[0][0] == 0 || words[1][0] == 0) {
-        fprintf(stderr, "open input/output N\n");
+        cerr <<  "open input/output N" << endl;
         break;
       }
       port = atoi(words[2]);
@@ -232,32 +267,32 @@ void run() {
         // TODO check error
         break;
       default:
-        printf("# error: unknown subcommand %s\n", words[1]);
+        cout <<  "# error: unknown subcommand " << words[1] << endl;
         break;
       }
       break;
     case 's':
       if (input == 0)
-        fprintf(stderr, "please select an input port first\n");
+        cerr << "please select an input port first" << endl;
       else
         send_file_or_bytes(input, &words[1]);
       break;
     case 'r':
       if (output == 0)
-        fprintf(stderr, "please select an output port first\n");
+        cerr << "please select an output port first" << endl;
       else
         receive_and_print_bytes(output);
       break;
     case 'p':
-      for (i = 1; words[i] != 0; ++i) {
-        if (i > 1) putchar(' ');
-        puts(words[i]);
+      for (int i = 1; words[i] != 0; ++i) {
+        if (i > 1) cout << ' ';
+        cout << words[i];
       }
-      putchar('\n');
+      cout << endl;
       break;
     case 'x':
       if (input == 0 || output == 0)
-        fprintf(stderr, "please select output and inport ports first\n");
+        cerr << "please select output and inport ports first" << endl;
       else {
         send_file_or_bytes(input, &words[1]);
         receive_and_print_bytes(output);
@@ -270,15 +305,72 @@ void run() {
       return;
     default:
       if (words[0][0] != 0)
-        fprintf(stderr, "unknown command %s, type 'h' for help\n", words[0]);
+        cerr << "unknown command " << words[0] << ", type 'h' for help" << endl;
       break;
     }       
   }
 }
 
+void usage(const char *prog_name) {
+  cerr << "usage: " << basename((char *)prog_name) << " [-l] [-i] [-o]\n"
+       << endl
+       << "    -l or --list-ports" << endl
+       << "        List all attached MIDI ports" << endl
+       << endl
+       << "    -i or --input PORT" << endl
+       << "        Use input port PORT" << endl
+       << endl
+       << "    -o or --output PORT" << endl
+       << "        Use output port PORT" << endl
+       << endl
+       << "    -h or --help" << endl
+       << "        This help" << endl;
+}
+
+void parse_command_line(int argc, char * const *argv, struct opts *opts) {
+  int ch;
+  static struct option longopts[] = {
+    {"list", no_argument, 0, 'l'},
+    {"input-port", required_argument, 0, 'i'},
+    {"output-port", required_argument, 0, 'o'},
+    {"help", no_argument, 0, 'h'},
+    {0, 0, 0, 0}
+  };
+
+  opts->list_devices = false;
+  opts->input_port = opts->output_port = -1;
+  while ((ch = getopt_long(argc, argv, "li:o:h", longopts, 0)) != -1) {
+    switch (ch) {
+    case 'l':
+      opts->list_devices = true;
+      break;
+    case 'i':
+      opts->input_port = atoi(optarg);
+      break;
+    case 'o':
+      opts->output_port = atoi(optarg);
+      break;
+    case 'h': default:
+      usage(argv[0]);
+      exit(ch == '?' || ch == 'h' ? 0 : 1);
+    }
+  }
+}
+
 int main(int argc, char * const *argv) {
+  struct opts opts;
+
+  parse_command_line(argc, argv, &opts);
+  argc -= optind;
+  argv += optind;
+
+  if (opts.list_devices) {
+    list_all_devices();
+    exit(0);
+  }
+
   initialize();
-  run();
+  run(&opts);
   exit(0);
   return 0;
 }
