@@ -15,7 +15,7 @@
 #define BYTES_BUFSIZ 8192
 #define MAX_WORDS 1024
 #define PM_EVENT_BUFSIZ 256
-#define WAIT_FOR_SYSEX_TIMEOUT_SECS 5
+#define WAIT_FOR_SYSEX_TIMEOUT_SECS 10
 // 10 milliseconds, in nanoseconds
 #define SLEEP_NANOSECS 1e7
 
@@ -113,7 +113,7 @@ void split_line_into_words(char *line, char *words[]) {
   *ap = 0;
 }
 
-void send_file_bytes(PortMidiStream *input, char *fname) {
+void send_file_bytes(PortMidiStream *output, char *fname) {
   char line[BUFSIZ], *words[MAX_WORDS];
   byte bytes[BYTES_BUFSIZ], *bptr = bytes;
   int i, offset = 0;
@@ -127,36 +127,38 @@ void send_file_bytes(PortMidiStream *input, char *fname) {
       *bptr++ = hex_word_to_byte(words[i]);
     }
   }
-  Pm_WriteSysEx(input, 0, bytes);
+  Pm_WriteSysEx(output, 0, bytes);
   fclose(fp);
 }
 
-void send_hex_bytes(PortMidiStream *input, char **words) {
+void send_hex_bytes(PortMidiStream *output, char **words) {
   byte bytes[BYTES_BUFSIZ];
   int i;
 
   for (i = 0; words[i]; ++i)
     bytes[i] = hex_word_to_byte(words[i]);
-  Pm_WriteSysEx(input, 0, bytes);
+  Pm_WriteSysEx(output, 0, bytes);
 }
 
-void send_file_or_bytes(PortMidiStream *input, char **words) {
+void send_file_or_bytes(PortMidiStream *output, char **words) {
   if (access(words[0], F_OK) != -1)
-    send_file_bytes(input, words[0]);
+    send_file_bytes(output, words[0]);
   else
-    send_hex_bytes(input, words);
+    send_hex_bytes(output, words);
 }
 
-SysexState read_and_process_sysex(PortMidiStream *output, SysexState sysex_state) {
+SysexState read_and_process_sysex(PortMidiStream *input, SysexState sysex_state) {
   PmEvent events[PM_EVENT_BUFSIZ];
 
-  int num_read = Pm_Read(output, events, PM_EVENT_BUFSIZ);
+  int num_read = Pm_Read(input, events, PM_EVENT_BUFSIZ);
   for (int i = 0; i < num_read; ++i) {
+    PmMessage msg = events[i].message;
+    byte *bp = (byte *)&msg;
     for (int j = 0; j < 4; ++j) {
-      PmMessage msg = events[i].message;
-      byte b = ((byte *)(void *)&msg)[j];
+      byte b = bp[j];
       if (sysex_state == SYSEX_PROCESSING) {
-        cout << " " << setfill('0') << setw(2) << hex << b;
+        // cout << " " << setfill('0') << setw(2) << hex << b;
+        printf(" %02x", b);
         if (b == EOX) {
           cout << endl;
           return SYSEX_DONE;
@@ -165,7 +167,8 @@ SysexState read_and_process_sysex(PortMidiStream *output, SysexState sysex_state
       else if (b == SYSEX) {
         if (sysex_state != SYSEX_WAITING)
           cerr << "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte" << endl;
-        cout << " " << setfill('0') << setw(2) << hex << b;
+        // cout << " " << setfill('0') << setw(2) << hex << b;
+        printf(" %02x", b);
         sysex_state = SYSEX_PROCESSING;
       }
     }
@@ -173,19 +176,27 @@ SysexState read_and_process_sysex(PortMidiStream *output, SysexState sysex_state
   return sysex_state;
 }
 
-void receive_and_print_bytes(PortMidiStream *output) {
+void receive_and_print_bytes(PortMidiStream *input) {
   struct timespec rqtp = {0, SLEEP_NANOSECS};
   SysexState sysex_state = SYSEX_WAITING;
   time_t start_time = time(0);
 
   while (sysex_state != SYSEX_DONE) {
     if (difftime(time(0), start_time) >= WAIT_FOR_SYSEX_TIMEOUT_SECS) {
-      cerr << "it's been " << WAIT_FOR_SYSEX_TIMEOUT_SECS
-           << "seconds and I haven't seen a SYSEX message" << endl;
-      return;
+      cerr << "it's been " << WAIT_FOR_SYSEX_TIMEOUT_SECS << " seconds";
+      switch (sysex_state) {
+      case SYSEX_WAITING:
+        cerr << " and I haven't seen a SYSEX message" << endl;
+        return;
+      case SYSEX_PROCESSING:
+        cerr << " and I'm still getting SYSEX!" << endl;
+        break;
+      default:
+        break;
+      }
     }
-    if (Pm_Poll(output) == TRUE)
-      sysex_state = read_and_process_sysex(output, sysex_state);
+    if (Pm_Poll(input) == TRUE)
+      sysex_state = read_and_process_sysex(input, sysex_state);
     else {
       if (nanosleep(&rqtp, 0) == -1)
         return;                 // TODO handle error
@@ -196,8 +207,8 @@ void receive_and_print_bytes(PortMidiStream *output) {
 void help() {
   cout << "list                  List all devices" << endl
        << "open input/output N   Open input or output port" << endl
-       << "send file | b [b...]  Send file or bytes to open input; all b must be hex" << endl
-       << "receive               Receive and print bytes from open output" << endl
+       << "send file | b [b...]  Send file or bytes to open output; all b must be hex" << endl
+       << "receive               Receive and print bytes from open input" << endl
        << "x file | b [b...]     Send file or bytes, then receive and print" << endl
        << "p words...            Print words (good for scripts)" << endl
        << "help                  This help" << endl
@@ -272,16 +283,16 @@ void run(struct opts *opts) {
       }
       break;
     case 's':
-      if (input == 0)
-        cerr << "please select an input port first" << endl;
-      else
-        send_file_or_bytes(input, &words[1]);
-      break;
-    case 'r':
       if (output == 0)
         cerr << "please select an output port first" << endl;
       else
-        receive_and_print_bytes(output);
+        send_file_or_bytes(output, &words[1]);
+      break;
+    case 'r':
+      if (input == 0)
+        cerr << "please select an input port first" << endl;
+      else
+        receive_and_print_bytes(input);
       break;
     case 'p':
       for (int i = 1; words[i] != 0; ++i) {
@@ -294,8 +305,8 @@ void run(struct opts *opts) {
       if (input == 0 || output == 0)
         cerr << "please select output and inport ports first" << endl;
       else {
-        send_file_or_bytes(input, &words[1]);
-        receive_and_print_bytes(output);
+        send_file_or_bytes(output, &words[1]);
+        receive_and_print_bytes(input);
       }
       break;
     case 'h': case '?':
