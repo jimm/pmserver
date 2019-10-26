@@ -44,9 +44,9 @@ Opens input port number N.
 
 Opens output port number N.
 
-## s[end] file | b[, b...]
+## s[end] @file | b[, b...]
 
-Sends contents of file (ASCII hex bytes) or bytes to the open input. Byte
+Sends contents of @file (ASCII hex bytes) or bytes to the open input. Byte
 values `b` are in hex.
 
 ## r[eceive]
@@ -54,7 +54,7 @@ values `b` are in hex.
 Receives sysex from the open output and returns it as a string of ASCII hex
 bytes separated by spaces.
 
-## x file | b[, b...]
+## x @file | b[, b...]
 
 Sends contents of file (ASCII hex bytes) or bytes to the open input,
 presumed to be a sysex message, and receives and prints the reply.
@@ -75,10 +75,8 @@ Only one input and output can be open at a time.
 $ ./pmserver <<EOS
 o i 1
 o o 3
-p request for set list digest 0
+p request for set list digest
 x f0 42 30 68 37 0d 0 f7
-p request for set list digest 1
-x f0 42 30 68 37 0d 1 f7
 q
 EOS
 ```

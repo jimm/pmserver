@@ -18,6 +18,7 @@
 #define WAIT_FOR_SYSEX_TIMEOUT_SECS 10
 // 10 milliseconds, in nanoseconds
 #define SLEEP_NANOSECS 1e7
+#define FILE_NAME_INDICATOR_CHAR '@'
 
 using std::cout;
 using std::cerr;
@@ -40,6 +41,8 @@ struct opts {
   int input_port;
   int output_port;
 } opts;
+
+bool port_midi_initialized = false;
 
 void list_devices(const char *title, const PmDeviceInfo *infos[], int num_devices) {
   cout << title << ":" << endl;
@@ -71,7 +74,9 @@ void list_all_devices() {
 }
 
 void cleanup() {
+  fprintf(stderr, "starting cleanup\n"); // DEBUG
   Pm_Terminate();
+  fprintf(stderr, "finished with cleanup\n"); // DEBUG
 }
 
 void initialize() {
@@ -141,8 +146,8 @@ void send_hex_bytes(PortMidiStream *output, char **words) {
 }
 
 void send_file_or_bytes(PortMidiStream *output, char **words) {
-  if (access(words[0], F_OK) != -1)
-    send_file_bytes(output, words[0]);
+  if (words[0][0] == FILE_NAME_INDICATOR_CHAR)
+    send_file_bytes(output, &words[0][1]);
   else
     send_hex_bytes(output, words);
 }
@@ -223,7 +228,6 @@ void run(struct opts *opts) {
   int port, err;
   PortMidiStream *input = 0, *output = 0;
 
-  // TODO check error
   if (opts->input_port >= 0) {
     err = Pm_OpenInput(&input, opts->input_port, 0, MIDI_BUFSIZ, 0, 0);
     if (err != 0)
@@ -236,21 +240,24 @@ void run(struct opts *opts) {
   }
 
   while (1) {
-    cout << "> " << flush;
+    if (isatty(fileno(stdin)))
+      cout << "> " << flush;
     if (fgets(line, LINE_BUFSIZ, stdin) == 0) {
       if (feof(stdin)) {
-        cout << endl;
+        if (isatty(fileno(stdin)))
+          cout << endl;
         return;
       }
       continue;
     }
     line[strlen(line) - 1] = 0;
+    fprintf(stderr, "I see line %s\n", line); // DEBUG
     string = line;
     for (ap = words; (*ap = strsep(&string, " ")) != 0; )
       if (**ap != 0)            // skip empty entries (two spaces in a row)
         if (++ap >= &words[MAX_WORDS])
           break;
-    if (ap == words || words[0][0] == '#') // if empty line or comment, done
+    if ((ap == words && words[0][0] == 0) || words[0][0] == '#') // if empty line or comment, done
       continue;
     *ap = 0;
 
@@ -313,6 +320,7 @@ void run(struct opts *opts) {
       help();
       break;
     case 'q':
+      fprintf(stderr, "q seen, quitting\n"); // DEBUG
       return;
     default:
       if (words[0][0] != 0)
@@ -382,6 +390,8 @@ int main(int argc, char * const *argv) {
 
   initialize();
   run(&opts);
+  fprintf(stderr, "returned from run\n"); // DEBUG
   exit(0);
+  fprintf(stderr, "after exit???\n"); // DEBUG
   return 0;
 }
