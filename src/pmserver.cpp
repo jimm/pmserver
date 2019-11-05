@@ -1,213 +1,24 @@
 #include <iostream>
 #include <iomanip>
-#include <stdio.h>              // NEEDED?
-#include <string.h>
-#include <stdlib.h>
-#include <time.h>
-#include <unistd.h>
 #include <libgen.h>
 #include <getopt.h>
+#include <unistd.h>
 #include "portmidi.h"
-#include "consts.h"
+#include "server.h"
 
 #define LINE_BUFSIZ 8192
 #define MIDI_BUFSIZ 128
-#define BYTES_BUFSIZ 8192
-#define MAX_WORDS 1024
-#define PM_EVENT_BUFSIZ 256
-#define WAIT_FOR_SYSEX_TIMEOUT_SECS 10
-// 10 milliseconds, in nanoseconds
-#define SLEEP_NANOSECS 1e7
-#define FILE_NAME_INDICATOR_CHAR '@'
 
 using std::cout;
 using std::cerr;
 using std::endl;
-using std::setw;
-using std::setfill;
-using std::hex;
 using std::flush;
-
-typedef unsigned char byte;
-
-typedef enum SysexState {
-  SYSEX_WAITING,
-  SYSEX_PROCESSING,
-  SYSEX_DONE
-} SysexState;
 
 struct opts {
   bool list_devices;
   int input_port;
   int output_port;
 } opts;
-
-bool port_midi_initialized = false;
-
-void list_devices(const char *title, const PmDeviceInfo *infos[], int num_devices) {
-  cout << title << ":" << endl;
-  for (int i = 0; i < num_devices; ++i) {
-    if (infos[i] == 0)
-      continue;
-
-    const char *name = infos[i]->name;
-    const char *q = (name[0] == ' ' || name[strlen(name)-1] == ' ') ? "\"" : "";
-    cout << "   " << setw(2) << i << ": "
-         << q << name << q
-         << (infos[i]->opened ? " (open)" : "")
-         << endl;
-  }
-}
-
-void list_all_devices() {
-  int num_devices = Pm_CountDevices();
-  const PmDeviceInfo *inputs[num_devices], *outputs[num_devices];
-
-  for (int i = 0; i < num_devices; ++i) {
-    const PmDeviceInfo *info = Pm_GetDeviceInfo(i);
-    inputs[i] = info->input ? info : 0;
-    outputs[i] = info->output ? info : 0;
-  }
-
-  list_devices("Inputs", inputs, num_devices);
-  list_devices("Outputs", outputs, num_devices);
-}
-
-void cleanup() {
-  fprintf(stderr, "starting cleanup\n"); // DEBUG
-  Pm_Terminate();
-  fprintf(stderr, "finished with cleanup\n"); // DEBUG
-}
-
-void initialize() {
-  Pm_Initialize();
-  atexit(cleanup);
-}
-
-byte hex_word_to_byte(char *word) {
-  byte val = 0;
-  for (char *ch = word; *ch; ++ch) {
-    val *= 16;
-    switch (*ch) {
-    case '0': case '1': case '2': case '3': case '4':
-    case '5': case '6': case '7': case '8': case '9':
-      val += (byte)(*ch - '0');
-      break;
-    case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
-      val += (byte)(*ch - 'a' + 10);
-      break;
-    case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
-      val += (byte)(*ch - 'A' + 10);
-      break;
-    }
-  }
-  return val;
-}
-
-void split_line_into_words(char *line, char *words[]) {
-  char *string, **ap;
-  int line_len = strlen(line);
-
-  if (line[line_len - 1] == '\n')
-    line[line_len - 1] = 0;
-  string = line;
-  for (ap = words; (*ap = strsep(&string, " ")) != 0; )
-    if (**ap != 0)
-      if (++ap >= &words[MAX_WORDS])
-        break;
-  *ap = 0;
-}
-
-void send_file_bytes(PortMidiStream *output, char *fname) {
-  char line[BUFSIZ], *words[MAX_WORDS];
-  byte bytes[BYTES_BUFSIZ], *bptr = bytes;
-  int i, offset = 0;
-  FILE *fp = fopen(fname, "r");
-
-  while (fgets(line, BUFSIZ, fp) != 0) {
-    split_line_into_words(line, words);
-    for (i = 0; words[i]; ++i) {
-      if (words[i][0] == '#')
-        break;
-      *bptr++ = hex_word_to_byte(words[i]);
-    }
-  }
-  Pm_WriteSysEx(output, 0, bytes);
-  fclose(fp);
-}
-
-void send_hex_bytes(PortMidiStream *output, char **words) {
-  byte bytes[BYTES_BUFSIZ];
-  int i;
-
-  for (i = 0; words[i]; ++i)
-    bytes[i] = hex_word_to_byte(words[i]);
-  Pm_WriteSysEx(output, 0, bytes);
-}
-
-void send_file_or_bytes(PortMidiStream *output, char **words) {
-  if (words[0][0] == FILE_NAME_INDICATOR_CHAR)
-    send_file_bytes(output, &words[0][1]);
-  else
-    send_hex_bytes(output, words);
-}
-
-SysexState read_and_process_sysex(PortMidiStream *input, SysexState sysex_state) {
-  PmEvent events[PM_EVENT_BUFSIZ];
-
-  int num_read = Pm_Read(input, events, PM_EVENT_BUFSIZ);
-  for (int i = 0; i < num_read; ++i) {
-    PmMessage msg = events[i].message;
-    byte *bp = (byte *)&msg;
-    for (int j = 0; j < 4; ++j) {
-      byte b = bp[j];
-      if (sysex_state == SYSEX_PROCESSING) {
-        // cout << " " << setfill('0') << setw(2) << hex << b;
-        printf(" %02x", b);
-        if (b == EOX) {
-          cout << endl;
-          return SYSEX_DONE;
-        }
-      }
-      else if (b == SYSEX) {
-        if (sysex_state != SYSEX_WAITING)
-          cerr << "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte" << endl;
-        // cout << " " << setfill('0') << setw(2) << hex << b;
-        printf(" %02x", b);
-        sysex_state = SYSEX_PROCESSING;
-      }
-    }
-  }
-  return sysex_state;
-}
-
-void receive_and_print_bytes(PortMidiStream *input) {
-  struct timespec rqtp = {0, SLEEP_NANOSECS};
-  SysexState sysex_state = SYSEX_WAITING;
-  time_t start_time = time(0);
-
-  while (sysex_state != SYSEX_DONE) {
-    if (difftime(time(0), start_time) >= WAIT_FOR_SYSEX_TIMEOUT_SECS) {
-      cerr << "it's been " << WAIT_FOR_SYSEX_TIMEOUT_SECS << " seconds";
-      switch (sysex_state) {
-      case SYSEX_WAITING:
-        cerr << " and I haven't seen a SYSEX message" << endl;
-        return;
-      case SYSEX_PROCESSING:
-        cerr << " and I'm still getting SYSEX!" << endl;
-        break;
-      default:
-        break;
-      }
-    }
-    if (Pm_Poll(input) == TRUE)
-      sysex_state = read_and_process_sysex(input, sysex_state);
-    else {
-      if (nanosleep(&rqtp, 0) == -1)
-        return;                 // TODO handle error
-    }
-  }
-}
 
 void help() {
   cout << "list                  List all devices" << endl

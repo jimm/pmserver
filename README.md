@@ -32,6 +32,8 @@ f0 42 30 68 38 0d 0 ...23 bytes... f7
 
 All commands and subcommands can be abbreviated to one character.
 
+All lists of bytes
+
 ## l[ist]
 
 List all open input and output ports.
@@ -44,20 +46,23 @@ Opens input port number N.
 
 Opens output port number N.
 
-## s[end] @file | b[, b...]
+## s[end] @file | .file | b[ b...]
 
-Sends contents of @file (ASCII hex bytes) or bytes to the open input. Byte
-values `b` are in hex.
+Sends either the contents of a file (@ for ASCII hex bytes, . for binary) or
+bytes to the open input. Byte values `b` are in hex. Bytes can be strung
+together with our without spaces between them. If a byte string is more than
+one character long then all hex numbers in it must be two hex digits long.
 
 ## r[eceive]
 
 Receives sysex from the open output and returns it as a string of ASCII hex
 bytes separated by spaces.
 
-## x @file | b[, b...]
+## x @file | .file | b[, b...]
 
-Sends contents of file (ASCII hex bytes) or bytes to the open input,
-presumed to be a sysex message, and receives and prints the reply.
+Sends either the contents of a file (@ for ASCII hex bytes, . for binary) or
+bytes to the open input, presumed to be a sysex message, and receives and
+prints the reply.
 
 ## p words...
 
