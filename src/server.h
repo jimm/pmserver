@@ -4,8 +4,6 @@
 #include <vector>
 #include "portmidi.h"
 
-#define MAX_WORDS 1024
-
 typedef unsigned char byte;
 
 typedef enum SysexState {
@@ -38,7 +36,6 @@ protected:
 
   void list_devices(const char *title, std::vector<PmDeviceInfo *> &devices, bool inputs);
   byte char_to_nibble(const char ch);
-  void split_line_into_words(char *line, char *words[]);
   void send_hex_file_bytes(char *fname);
   void send_bin_file_bytes(char *fname);
   void send_hex_bytes(char **words);

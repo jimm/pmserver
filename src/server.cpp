@@ -7,6 +7,7 @@
 #include "portmidi.h"
 #include "consts.h"
 #include "server.h"
+#include "util.h"
 
 #define BYTES_BUFSIZ 8192
 #define MIDI_BUFSIZ 128
@@ -116,20 +117,6 @@ void Server::hex_word_to_bytes(const char * const word, vector<byte> &bytes) {
     bytes.push_back((char_to_nibble(*p) << 4) + char_to_nibble(*(p+1)));
     p += 2;
   }
-}
-
-void Server::split_line_into_words(char *line, char *words[]) {
-  char *string, **ap;
-  int line_len = strlen(line);
-
-  if (line[line_len - 1] == '\n')
-    line[line_len - 1] = 0;
-  string = line;
-  for (ap = words; (*ap = strsep(&string, " ")) != 0; )
-    if (**ap != 0)
-      if (++ap >= &words[MAX_WORDS])
-        break;
-  *ap = 0;
 }
 
 void Server::send_hex_file_bytes(char *fname) {

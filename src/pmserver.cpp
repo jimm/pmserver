@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include "portmidi.h"
 #include "server.h"
+#include "util.h"
 
 #define LINE_BUFSIZ 8192
 
@@ -34,9 +35,8 @@ void help() {
 }
 
 void run(Server &server, struct opts *opts) {
-  char line[LINE_BUFSIZ];
+  char line[LINE_BUFSIZ],  *words[MAX_WORDS];
   int err;
-  PortMidiStream *input = 0, *output = 0;
 
   if (opts->input_port >= 0) {
     err = server.open_input(opts->input_port);
@@ -61,27 +61,17 @@ void run(Server &server, struct opts *opts) {
       }
       continue;
     }
-    line[strlen(line) - 1] = 0;
-
-    // split line into words
-    char *string, **ap, *words[MAX_WORDS];
-    string = line;
-    for (ap = words; (*ap = strsep(&string, " ")) != 0; )
-      if (**ap != 0)            // skip empty entries (two spaces in a row)
-        if (++ap >= &words[MAX_WORDS])
-          break;
-    if ((ap == words && words[0][0] == 0) || words[0][0] == '#') // if empty line or comment, done
-      continue;
-    *ap = 0;
+    split_line_into_words(line, words);
 
     // dispatch action based on first character of first word
     int port;
-    switch (words[0][0]) {
+    char cmd = words[0][0];
+    switch (cmd) {
     case 'l':
       server.list_all_devices();
       break;
     case 'o':
-      if (words[0][0] == 0 || words[1][0] == 0) {
+      if (words[1] == 0 || words[1][0] == 0 || words[2] == 0 || words[2] == 0) {
         cerr <<  "open input/output N" << endl;
         break;
       }
@@ -133,7 +123,7 @@ void run(Server &server, struct opts *opts) {
     case 'q':
       return;
     default:
-      if (words[0][0] != 0)
+      if (cmd != 0)
         cerr << "unknown command " << words[0] << ", type 'h' for help" << endl;
       break;
     }       
