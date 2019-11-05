@@ -62,7 +62,6 @@ void run(struct opts *opts) {
       continue;
     }
     line[strlen(line) - 1] = 0;
-    fprintf(stderr, "I see line %s\n", line); // DEBUG
     string = line;
     for (ap = words; (*ap = strsep(&string, " ")) != 0; )
       if (**ap != 0)            // skip empty entries (two spaces in a row)
@@ -131,7 +130,6 @@ void run(struct opts *opts) {
       help();
       break;
     case 'q':
-      fprintf(stderr, "q seen, quitting\n"); // DEBUG
       return;
     default:
       if (words[0][0] != 0)
@@ -201,8 +199,6 @@ int main(int argc, char * const *argv) {
 
   initialize();
   run(&opts);
-  fprintf(stderr, "returned from run\n"); // DEBUG
   exit(0);
-  fprintf(stderr, "after exit???\n"); // DEBUG
   return 0;
 }
