@@ -34,33 +34,30 @@ typedef enum SysexState {
 
 bool port_midi_initialized = false;
 
-void list_devices(const char *title, const PmDeviceInfo *infos[], int num_devices) {
+void list_devices(const char *title, vector<PmDeviceInfo *> &devices, bool inputs) {
   cout << title << ":" << endl;
-  for (int i = 0; i < num_devices; ++i) {
-    if (infos[i] == 0)
+  vector<PmDeviceInfo *>::iterator iter = devices.begin();
+  for (int i = 0; iter != devices.end(); ++iter, ++i) {
+    if ((inputs && !(*iter)->input) || (!inputs && !(*iter)->output))
       continue;
 
-    const char *name = infos[i]->name;
+    const char *name = (*iter)->name;
     const char *q = (name[0] == ' ' || name[strlen(name)-1] == ' ') ? "\"" : "";
     cout << "   " << setw(2) << i << ": "
          << q << name << q
-         << (infos[i]->opened ? " (open)" : "")
+         << ((*iter)->opened ? " (open)" : "")
          << endl;
   }
 }
 
 void list_all_devices() {
+  vector<PmDeviceInfo *>devices;
   int num_devices = Pm_CountDevices();
-  const PmDeviceInfo *inputs[num_devices], *outputs[num_devices];
 
-  for (int i = 0; i < num_devices; ++i) {
-    const PmDeviceInfo *info = Pm_GetDeviceInfo(i);
-    inputs[i] = info->input ? info : 0;
-    outputs[i] = info->output ? info : 0;
-  }
-
-  list_devices("Inputs", inputs, num_devices);
-  list_devices("Outputs", outputs, num_devices);
+  for (int i = 0; i < num_devices; ++i)
+    devices.push_back((PmDeviceInfo * const)Pm_GetDeviceInfo(i));
+  list_devices("Inputs", devices, true);
+  list_devices("Outputs", devices, false);
 }
 
 void cleanup() {
