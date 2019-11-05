@@ -9,6 +9,7 @@
 #include "server.h"
 
 #define BYTES_BUFSIZ 8192
+#define MIDI_BUFSIZ 128
 #define PM_EVENT_BUFSIZ 256
 #define WAIT_FOR_SYSEX_TIMEOUT_SECS 10
 // 10 milliseconds, in nanoseconds
@@ -26,19 +27,20 @@ using std::vector;
 
 typedef unsigned char byte;
 
-typedef enum SysexState {
-  SYSEX_WAITING,
-  SYSEX_PROCESSING,
-  SYSEX_DONE
-} SysexState;
+void cleanup() {
+  Pm_Terminate();
+}
 
-bool port_midi_initialized = false;
+Server::Server() : input(0), output(0), sysex_state(SYSEX_WAITING) {
+  Pm_Initialize();
+  atexit(cleanup);
+}
 
-void list_devices(const char *title, vector<PmDeviceInfo *> &devices, bool inputs) {
+void Server::list_devices(const char *title, vector<PmDeviceInfo *> &devices, bool print_inputs) {
   cout << title << ":" << endl;
   vector<PmDeviceInfo *>::iterator iter = devices.begin();
   for (int i = 0; iter != devices.end(); ++iter, ++i) {
-    if ((inputs && !(*iter)->input) || (!inputs && !(*iter)->output))
+    if ((print_inputs && !(*iter)->input) || (!print_inputs && !(*iter)->output))
       continue;
 
     const char *name = (*iter)->name;
@@ -50,7 +52,7 @@ void list_devices(const char *title, vector<PmDeviceInfo *> &devices, bool input
   }
 }
 
-void list_all_devices() {
+void Server::list_all_devices() {
   vector<PmDeviceInfo *>devices;
   int num_devices = Pm_CountDevices();
 
@@ -60,16 +62,19 @@ void list_all_devices() {
   list_devices("Outputs", devices, false);
 }
 
-void cleanup() {
-  Pm_Terminate();
+PmError Server::open_input(int port) {
+  if (input != 0)
+    Pm_Close(input);
+  return Pm_OpenInput(&input, port, 0, MIDI_BUFSIZ, 0, 0);
 }
 
-void initialize() {
-  Pm_Initialize();
-  atexit(cleanup);
+PmError Server::open_output(int port) {
+  if (output != 0)
+    Pm_Close(output);
+  return Pm_OpenOutput(&output, port, 0, 128, 0, 0, 0);
 }
 
-byte char_to_nibble(const char ch) {
+byte Server::char_to_nibble(const char ch) {
     switch (ch) {
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
@@ -93,7 +98,7 @@ byte char_to_nibble(const char ch) {
  * If `word` contains an odd number of characters greater than 1, an error
  * message is output and the last character is ignored.
  */
-void hex_word_to_bytes(const char * const word, vector<byte> &bytes) {
+void Server::hex_word_to_bytes(const char * const word, vector<byte> &bytes) {
   if (*word == 0)
     return;
 
@@ -113,7 +118,7 @@ void hex_word_to_bytes(const char * const word, vector<byte> &bytes) {
   }
 }
 
-void split_line_into_words(char *line, char *words[]) {
+void Server::split_line_into_words(char *line, char *words[]) {
   char *string, **ap;
   int line_len = strlen(line);
 
@@ -127,7 +132,7 @@ void split_line_into_words(char *line, char *words[]) {
   *ap = 0;
 }
 
-void send_hex_file_bytes(PortMidiStream *output, char *fname) {
+void Server::send_hex_file_bytes(char *fname) {
   vector<byte> bytes;
   char line[BUFSIZ], *words[MAX_WORDS];
   int i, offset = 0;
@@ -145,7 +150,7 @@ void send_hex_file_bytes(PortMidiStream *output, char *fname) {
   fclose(fp);
 }
 
-void send_bin_file_bytes(PortMidiStream *output, char *fname) {
+void Server::send_bin_file_bytes(char *fname) {
   vector<byte> bytes;
   byte buf[BYTES_BUFSIZ];
   size_t num_read;
@@ -160,7 +165,7 @@ void send_bin_file_bytes(PortMidiStream *output, char *fname) {
   fclose(fp);
 }
 
-void send_hex_bytes(PortMidiStream *output, char **words) {
+void Server::send_hex_bytes(char **words) {
   vector<byte> bytes;
   int i;
 
@@ -169,21 +174,21 @@ void send_hex_bytes(PortMidiStream *output, char **words) {
   Pm_WriteSysEx(output, 0, bytes.data());
 }
 
-void send_file_or_bytes(PortMidiStream *output, char **words) {
+void Server::send_file_or_bytes(char **words) {
   switch (words[0][0]) {
   case HEX_FILE_NAME_INDICATOR_CHAR:
-    send_hex_file_bytes(output, &words[0][1]);
+    send_hex_file_bytes(&words[0][1]);
     break;
   case BIN_FILE_NAME_INDICATOR_CHAR:
-    send_bin_file_bytes(output, &words[0][1]);
+    send_bin_file_bytes(&words[0][1]);
     break;
   default:
-    send_hex_bytes(output, words);
+    send_hex_bytes(words);
     break;
   }
 }
 
-SysexState read_and_process_sysex(PortMidiStream *input, SysexState sysex_state) {
+void Server::read_and_process_sysex() {
   PmEvent events[PM_EVENT_BUFSIZ];
 
   int num_read = Pm_Read(input, events, PM_EVENT_BUFSIZ);
@@ -197,7 +202,8 @@ SysexState read_and_process_sysex(PortMidiStream *input, SysexState sysex_state)
         printf(" %02x", b);
         if (b == EOX) {
           cout << endl;
-          return SYSEX_DONE;
+          sysex_state = SYSEX_DONE;
+          return;
         }
       }
       else if (b == SYSEX) {
@@ -209,14 +215,13 @@ SysexState read_and_process_sysex(PortMidiStream *input, SysexState sysex_state)
       }
     }
   }
-  return sysex_state;
 }
 
-void receive_and_print_bytes(PortMidiStream *input) {
+void Server::receive_and_print_bytes() {
   struct timespec rqtp = {0, SLEEP_NANOSECS};
-  SysexState sysex_state = SYSEX_WAITING;
   time_t start_time = time(0);
 
+  sysex_state = SYSEX_WAITING;
   while (sysex_state != SYSEX_DONE) {
     if (difftime(time(0), start_time) >= WAIT_FOR_SYSEX_TIMEOUT_SECS) {
       cerr << "it's been " << WAIT_FOR_SYSEX_TIMEOUT_SECS << " seconds";
@@ -232,7 +237,7 @@ void receive_and_print_bytes(PortMidiStream *input) {
       }
     }
     if (Pm_Poll(input) == TRUE)
-      sysex_state = read_and_process_sysex(input, sysex_state);
+      read_and_process_sysex();
     else {
       if (nanosleep(&rqtp, 0) == -1)
         return;                 // TODO handle error

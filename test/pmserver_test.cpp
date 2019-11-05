@@ -46,11 +46,16 @@ void print_results() {
 
 // ================ pmserver tests ================
 
+struct MockServer : Server {
+  MockServer() {};
+};
+
 void hex_word_test(const char * const str, byte expected[], int num_expected) {
+  MockServer server;
   vector<byte> bytes;
   char errmsg[BUFSIZ];
 
-  hex_word_to_bytes(str, bytes);
+  server.hex_word_to_bytes(str, bytes);
 
   sprintf(errmsg, "%s converted length %d is wrong, expected %d\n",
           str, (int)bytes.size(), num_expected);

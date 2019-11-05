@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <string.h>
 #include <libgen.h>
 #include <getopt.h>
 #include <unistd.h>
@@ -7,7 +8,6 @@
 #include "server.h"
 
 #define LINE_BUFSIZ 8192
-#define MIDI_BUFSIZ 128
 
 using std::cout;
 using std::cerr;
@@ -33,24 +33,24 @@ void help() {
        << "all commands can be entered using the shortest unique prefix (1 char)" << endl;
 }
 
-void run(struct opts *opts) {
+void run(Server &server, struct opts *opts) {
   char line[LINE_BUFSIZ];
-  char *string, **ap, *words[MAX_WORDS];
-  int port, err;
+  int err;
   PortMidiStream *input = 0, *output = 0;
 
   if (opts->input_port >= 0) {
-    err = Pm_OpenInput(&input, opts->input_port, 0, MIDI_BUFSIZ, 0, 0);
+    err = server.open_input(opts->input_port);
     if (err != 0)
       cerr << "error opening input port " << opts->input_port << endl;
   }
   if (opts->output_port >= 0) {
-    err = Pm_OpenOutput(&output, opts->output_port, 0, 128, 0, 0, 0);
+    err = server.open_output(opts->output_port);
     if (err != 0)
       cerr << "error opening input port " << opts->output_port << endl;
   }
 
   while (1) {
+    // get input, quitting if we see EOF
     if (isatty(fileno(stdin)))
       cout << "> " << flush;
     if (fgets(line, LINE_BUFSIZ, stdin) == 0) {
@@ -62,6 +62,9 @@ void run(struct opts *opts) {
       continue;
     }
     line[strlen(line) - 1] = 0;
+
+    // split line into words
+    char *string, **ap, *words[MAX_WORDS];
     string = line;
     for (ap = words; (*ap = strsep(&string, " ")) != 0; )
       if (**ap != 0)            // skip empty entries (two spaces in a row)
@@ -71,9 +74,11 @@ void run(struct opts *opts) {
       continue;
     *ap = 0;
 
+    // dispatch action based on first character of first word
+    int port;
     switch (words[0][0]) {
     case 'l':
-      list_all_devices();
+      server.list_all_devices();
       break;
     case 'o':
       if (words[0][0] == 0 || words[1][0] == 0) {
@@ -83,15 +88,11 @@ void run(struct opts *opts) {
       port = atoi(words[2]);
       switch (words[1][0]) {
       case 'o':
-        if (output != 0)
-          Pm_Close(output);
-        err = Pm_OpenOutput(&output, port, 0, 128, 0, 0, 0);
+        err = server.open_output(port);
         // TODO check error
         break;
       case 'i':
-        if (input != 0)
-          Pm_Close(input);
-        err = Pm_OpenInput(&input, port, 0, MIDI_BUFSIZ, 0, 0);
+        err = server.open_input(port);
         // TODO check error
         break;
       default:
@@ -100,16 +101,16 @@ void run(struct opts *opts) {
       }
       break;
     case 's':
-      if (output == 0)
+      if (!server.is_output_open() == 0)
         cerr << "please select an output port first" << endl;
       else
-        send_file_or_bytes(output, &words[1]);
+        server.send_file_or_bytes(&words[1]);
       break;
     case 'r':
-      if (input == 0)
+      if (!server.is_input_open())
         cerr << "please select an input port first" << endl;
       else
-        receive_and_print_bytes(input);
+        server.receive_and_print_bytes();
       break;
     case 'p':
       for (int i = 1; words[i] != 0; ++i) {
@@ -119,11 +120,11 @@ void run(struct opts *opts) {
       cout << endl;
       break;
     case 'x':
-      if (input == 0 || output == 0)
+      if (!server.is_input_open() || !server.is_output_open())
         cerr << "please select output and inport ports first" << endl;
       else {
-        send_file_or_bytes(output, &words[1]);
-        receive_and_print_bytes(input);
+        server.send_file_or_bytes(&words[1]);
+        server.receive_and_print_bytes();
       }
       break;
     case 'h': case '?':
@@ -192,13 +193,14 @@ int main(int argc, char * const *argv) {
   argc -= optind;
   argv += optind;
 
+  Server server;
+
   if (opts.list_devices) {
-    list_all_devices();
+    server.list_all_devices();
     exit(0);
   }
 
-  initialize();
-  run(&opts);
+  run(server, &opts);
   exit(0);
   return 0;
 }
