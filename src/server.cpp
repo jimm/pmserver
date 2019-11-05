@@ -1,11 +1,7 @@
 #include <iostream>
 #include <iomanip>
-#include <vector>
-#include <string.h>
-#include <stdlib.h>
-#include <time.h>
-#include "portmidi.h"
 #include "consts.h"
+#include "portmidi.h"
 #include "server.h"
 #include "util.h"
 
@@ -23,7 +19,6 @@ using std::cerr;
 using std::endl;
 using std::setw;
 using std::setfill;
-using std::hex;
 using std::vector;
 
 typedef unsigned char byte;
@@ -185,8 +180,6 @@ void Server::read_and_process_sysex() {
     for (int j = 0; j < 4; ++j) {
       byte b = bp[j];
       if (sysex_state == SYSEX_PROCESSING) {
-        // cout << " " << setfill('0') << setw(2) << hex << b;
-        printf(" %02x", b);
         if (b == EOX) {
           cout << endl;
           sysex_state = SYSEX_DONE;
@@ -196,8 +189,6 @@ void Server::read_and_process_sysex() {
       else if (b == SYSEX) {
         if (sysex_state != SYSEX_WAITING)
           cerr << "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte" << endl;
-        // cout << " " << setfill('0') << setw(2) << hex << b;
-        printf(" %02x", b);
         sysex_state = SYSEX_PROCESSING;
       }
     }

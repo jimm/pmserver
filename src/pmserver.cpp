@@ -1,10 +1,7 @@
 #include <iostream>
-#include <iomanip>
-#include <string.h>
 #include <libgen.h>
 #include <getopt.h>
 #include <unistd.h>
-#include "portmidi.h"
 #include "server.h"
 #include "util.h"
 
@@ -177,19 +174,14 @@ void parse_command_line(int argc, char * const *argv, struct opts *opts) {
 }
 
 int main(int argc, char * const *argv) {
+  Server server;
   struct opts opts;
 
   parse_command_line(argc, argv, &opts);
-  argc -= optind;
-  argv += optind;
-
-  Server server;
-
   if (opts.list_devices) {
     server.list_all_devices();
     exit(0);
   }
-
   run(server, &opts);
   exit(0);
   return 0;
