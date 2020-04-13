@@ -58,6 +58,14 @@ one character long then all hex numbers in it must be two hex digits long.
 Receives sysex from the open output and returns it as a string of ASCII hex
 bytes separated by spaces.
 
+## m[onitor]
+
+Listens for and prints all incoming MIDI messages. This is a superset of the
+`receive` command.
+
+Type `^C` to stop monitoring. (NOTE: this will quit pmserver now. That is a
+bug that I will fix ASAP.)
+
 ## x @file | .file | b[, b...]
 
 Sends either the contents of a file (@ for ASCII hex bytes, . for binary) or

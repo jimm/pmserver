@@ -22,7 +22,8 @@ void help() {
   cout << "list                  List all devices" << endl
        << "open input/output N   Open input or output port" << endl
        << "send file | b [b...]  Send file or bytes to open output; all b must be hex" << endl
-       << "receive               Receive and print bytes from open input" << endl
+       << "receive               Receive and print sysex bytes from open input" << endl
+       << "monitor               Receive and print all MIDI messages from open input" << endl
        << "x file | b [b...]     Send file or bytes, then receive and print" << endl
        << "p words...            Print words (good for scripts)" << endl
        << "help                  This help" << endl
@@ -97,7 +98,13 @@ void run(Server &server, struct opts *opts) {
       if (!server.is_input_open())
         cerr << "please select an input port first" << endl;
       else
-        server.receive_and_print_bytes();
+        server.receive_and_print_sysex_bytes();
+      break;
+    case 'm':
+      if (!server.is_input_open())
+        cerr << "please select an input port first" << endl;
+      else
+        server.receive_and_print_all_messages();
       break;
     case 'p':
       for (int i = 1; words[i] != 0; ++i) {
@@ -111,7 +118,7 @@ void run(Server &server, struct opts *opts) {
         cerr << "please select output and inport ports first" << endl;
       else {
         server.send_file_or_bytes(&words[1]);
-        server.receive_and_print_bytes();
+        server.receive_and_print_sysex_bytes();
       }
       break;
     case 'h': case '?':
