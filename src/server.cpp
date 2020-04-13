@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <signal.h>
 #include "consts.h"
 #include "portmidi.h"
 #include "server.h"
@@ -10,7 +11,7 @@
 #define PM_EVENT_BUFSIZ 256
 #define WAIT_FOR_SYSEX_TIMEOUT_SECS 10
 // 10 milliseconds, in nanoseconds
-#define SLEEP_NANOSECS 1e7
+#define SLEEP_NANOSECS 10000000L
 #define HEX_FILE_NAME_INDICATOR_CHAR '@'
 #define BIN_FILE_NAME_INDICATOR_CHAR '.'
 
@@ -22,6 +23,8 @@ using std::setfill;
 using std::vector;
 
 typedef unsigned char byte;
+
+sig_atomic_t monitoring;
 
 void cleanup() {
   Pm_Terminate();
@@ -98,12 +101,18 @@ void Server::receive_and_print_sysex_bytes() {
   }
 }
 
+void stop_monitoring(int _sig) {
+  monitoring = 0;
+}
 
 void Server::receive_and_print_all_messages() {
   struct timespec rqtp = {0, SLEEP_NANOSECS};
   time_t start_time = time(0);
   struct sigaction action = {stop_monitoring, SIGINT, SA_RESETHAND};
 
+  sigaction(SIGINT, &action, nullptr);
+
+  monitoring = 1;
   while (monitoring == 1) {
     if (Pm_Poll(input) == TRUE)
       read_and_process_any_message();
@@ -112,6 +121,7 @@ void Server::receive_and_print_all_messages() {
         return;                 // TODO handle error
     }
   }
+}
 
 byte Server::char_to_nibble(const char ch) {
     switch (ch) {

@@ -1,4 +1,5 @@
 NAME = pmserver
+CPPFLAGS += -std=c++11
 LIBS = -lc -lc++ -lportmidi
 LDFLAGS += $(LIBS)
 

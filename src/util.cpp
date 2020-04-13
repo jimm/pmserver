@@ -5,6 +5,11 @@ void split_line_into_words(char *line, char *words[]) {
   char *string, **ap;
   int line_len = strlen(line);
 
+  if (line[0] == '\0') {
+    words[0] = nullptr;
+    return;
+  }
+
   if (line[line_len - 1] == '\n')
     line[line_len - 1] = 0;
   string = line;
