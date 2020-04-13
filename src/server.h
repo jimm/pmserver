@@ -23,7 +23,7 @@ public:
   PmError open_output(int port);
 
   void receive_and_print_sysex_bytes();
-  void receive_and_print_all_messages();
+  void monitor_midi();
 
   bool is_input_open() { return input != 0; }
   bool is_output_open() { return output != 0; }
@@ -46,6 +46,7 @@ protected:
   void print_note(PmMessage msg, const char * const name);
   void print_three_byte_chan(PmMessage msg, const char * const name);
   void print_two_byte(PmMessage msg, const char * const name);
+  void print_four_sysex_bytes(PmMessage msg);
   void print_sys_common(PmMessage msg);
 };
 

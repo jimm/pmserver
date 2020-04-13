@@ -18,11 +18,17 @@
 using std::cout;
 using std::cerr;
 using std::endl;
+using std::hex;
+using std::right;
 using std::setw;
 using std::setfill;
 using std::vector;
 
 typedef unsigned char byte;
+
+static const char * NOTE_NAMES[] = {
+  "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
+};
 
 sig_atomic_t monitoring;
 
@@ -105,7 +111,7 @@ void stop_monitoring(int _sig) {
   monitoring = 0;
 }
 
-void Server::receive_and_print_all_messages() {
+void Server::monitor_midi() {
   struct timespec rqtp = {0, SLEEP_NANOSECS};
   time_t start_time = time(0);
   struct sigaction action = {stop_monitoring, SIGINT, SA_RESETHAND};
@@ -159,7 +165,7 @@ void Server::hex_word_to_bytes(const char * const word, vector<byte> &bytes) {
   const char *p = (const char *)word;
   while (*p) {
     if (*(p+1) == 0) {
-      fprintf(stderr, "error: odd number of hex digits seen, last byte dropped\n");
+      cerr << "error: odd number of hex digits seen, last byte dropped" << endl;
       return;
     }
     bytes.push_back((char_to_nibble(*p) << 4) + char_to_nibble(*(p+1)));
@@ -229,7 +235,13 @@ void Server::read_and_process_any_message() {
   int num_read = Pm_Read(input, events, PM_EVENT_BUFSIZ);
   for (int i = 0; i < num_read; ++i) {
     PmMessage msg = events[i].message;
-    switch (Pm_MessageStatus(msg) & 0xf0) {
+    int status = Pm_MessageStatus(msg);
+    int chan = (status & 0x0f) + 1;
+    int high_nibble = status & 0xf0;
+    int data1 = Pm_MessageData1(msg);
+    int data2 = Pm_MessageData2(msg);
+
+    switch (high_nibble) {
     case NOTE_OFF:
       print_note(msg, "off");
       break;
@@ -254,59 +266,102 @@ void Server::read_and_process_any_message() {
     case 0xf0:
       print_sys_common(msg);
       break;
+    default:
+      if (sysex_state == SYSEX_PROCESSING)
+        print_four_sysex_bytes(msg);
+      else {
+        cout << "??? status" << endl;
+        print_four_sysex_bytes(msg);
+      }
+      break;
     }
   }
 }
 
+void note_num_to_name(int num, char *buf) {
+  int oct = (num / 12) - 1;
+  const char *note = NOTE_NAMES[num % 12];
+  sprintf(buf, "%s%d", note, oct);
+}
+
 void Server::print_note(PmMessage msg, const char * const name) {
-  printf("%s\t%02d\t%d\t%d\n", name, (Pm_MessageStatus(msg) & 0x0f) + 1,
-         Pm_MessageData1(msg), Pm_MessageData2(msg));
+  char buf[8];
+  int status = Pm_MessageStatus(msg);
+  int chan = (status & 0x0f) + 1;
+  int note = Pm_MessageData1(msg);
+  int velocity = Pm_MessageData2(msg);
+
+  note_num_to_name(note, buf);
+  cout << name << "\tch " << chan << '\t' << buf << '\t' << velocity << endl;
 }
 
 void Server::print_three_byte_chan(PmMessage msg, const char * const name) {
-  printf("%s\t%02d\t%d\t%d\n", name, (Pm_MessageStatus(msg) & 0x0f) + 1,
-         Pm_MessageData1(msg), Pm_MessageData2(msg));
+  int status = Pm_MessageStatus(msg);
+  int chan = (status & 0x0f) + 1;
+  cout << name << "\tch " << chan
+       << '\t' << Pm_MessageData1(msg)
+       << '\t' << Pm_MessageData2(msg)
+       << endl;
 }
 
 void Server::print_two_byte(PmMessage msg, const char * const name) {
-  printf("%s\t%02d\t%d\n", name, (Pm_MessageStatus(msg) & 0x0f) + 1,
-         Pm_MessageData1(msg));
+  int status = Pm_MessageStatus(msg);
+  int chan = (status & 0x0f) + 1;
+  cout << name << "\tch " << chan
+       << '\t' << Pm_MessageData1(msg)
+       << endl;
+}
+
+void Server::print_four_sysex_bytes(PmMessage msg) {
+  byte *bp = (byte *)&msg;
+  // to hell with cout << setfill << setw << right << hex
+  printf("  %02x %02x %02x %02x\n", bp[0], bp[1], bp[2], bp[3]);
+  for (int i = 0; i < 4; ++i) {
+    if ((bp[i] & 0x80) != 0)
+      sysex_state = SYSEX_DONE;
+  }
 }
 
 void Server::print_sys_common(PmMessage msg) {
   switch (Pm_MessageStatus(msg)) {
   case SYSEX:
-    // TODO
+    cout << "sysex" << endl;
+    print_four_sysex_bytes(msg);
+    sysex_state = SYSEX_PROCESSING;
     break;
   case SONG_POINTER:
-    printf("songptr\t%d\t%d\n", Pm_MessageData1(msg), Pm_MessageData2(msg));
+    cout << "songptr\t" << Pm_MessageData1(msg) << '\t' << Pm_MessageData2(msg) << endl;
     break;
   case SONG_SELECT:
-    printf("songsel\t%d\n", Pm_MessageData1(msg));
+    cout << "songsel\t" << Pm_MessageData1(msg) << endl;
     break;
   case TUNE_REQUEST:
-    printf("tunereq\n");
+    cout << "tunereq" << endl;
     break;
   case EOX:
-    printf("eox\n");
+    cout << "eox" << endl;
+    sysex_state = SYSEX_PROCESSING;
     break;
   case CLOCK:
-    printf("clock\n");
+    cout << "clock" << endl;
     break;
   case START:
-    printf("start\n");
+    cout << "start" << endl;
     break;
   case CONTINUE:
-    printf("cont\n");
+    cout << "cont" << endl;
     break;
   case STOP:
-    printf("stop\n");
+    cout << "stop" << endl;
     break;
   case ACTIVE_SENSE:
-    printf("asense\n");
+    cout << "asense" << endl;
     break;
   case SYSTEM_RESET:
-    printf("reset\n");
+    cout << "reset" << endl;
+    break;
+  default:
+    cout << "???" << endl;
     break;
   }
 }

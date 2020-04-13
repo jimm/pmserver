@@ -103,8 +103,10 @@ void run(Server &server, struct opts *opts) {
     case 'm':
       if (!server.is_input_open())
         cerr << "please select an input port first" << endl;
-      else
-        server.receive_and_print_all_messages();
+      else {
+        cout << "type ^C to stop monitoring" << endl;
+        server.monitor_midi();
+      }
       break;
     case 'p':
       for (int i = 1; words[i] != 0; ++i) {
