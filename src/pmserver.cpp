@@ -39,12 +39,12 @@ void run(Server &server, struct opts *opts) {
   if (opts->input_port >= 0) {
     err = server.open_input(opts->input_port);
     if (err != 0)
-      cerr << "error opening input port " << opts->input_port << endl;
+      cerr << "# error opening input port " << opts->input_port << endl;
   }
   if (opts->output_port >= 0) {
     err = server.open_output(opts->output_port);
     if (err != 0)
-      cerr << "error opening input port " << opts->output_port << endl;
+      cerr << "# error opening input port " << opts->output_port << endl;
   }
 
   while (1) {
@@ -70,7 +70,7 @@ void run(Server &server, struct opts *opts) {
       break;
     case 'o':
       if (words[1] == 0 || words[1][0] == 0 || words[2] == 0 || words[2] == 0) {
-        cerr <<  "open input/output N" << endl;
+        cerr <<  "# open input/output N" << endl;
         break;
       }
       port = atoi(words[2]);
@@ -90,19 +90,19 @@ void run(Server &server, struct opts *opts) {
       break;
     case 's':
       if (!server.is_output_open() == 0)
-        cerr << "please select an output port first" << endl;
+        cerr << "# please select an output port first" << endl;
       else
         server.send_file_or_bytes(&words[1]);
       break;
     case 'r':
       if (!server.is_input_open())
-        cerr << "please select an input port first" << endl;
+        cerr << "# please select an input port first" << endl;
       else
         server.receive_and_print_sysex_bytes();
       break;
     case 'm':
       if (!server.is_input_open())
-        cerr << "please select an input port first" << endl;
+        cerr << "# please select an input port first" << endl;
       else {
         cout << "type ^C to stop monitoring" << endl;
         server.monitor_midi();
@@ -117,7 +117,7 @@ void run(Server &server, struct opts *opts) {
       break;
     case 'x':
       if (!server.is_input_open() || !server.is_output_open())
-        cerr << "please select output and inport ports first" << endl;
+        cerr << "# please select output and inport ports first" << endl;
       else {
         server.send_file_or_bytes(&words[1]);
         server.receive_and_print_sysex_bytes();
@@ -130,7 +130,7 @@ void run(Server &server, struct opts *opts) {
       return;
     default:
       if (cmd != 0)
-        cerr << "unknown command " << words[0] << ", type 'h' for help" << endl;
+        cerr << "# unknown command " << words[0] << ", type 'h' for help" << endl;
       break;
     }       
   }

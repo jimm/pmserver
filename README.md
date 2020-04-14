@@ -1,15 +1,18 @@
 # pmserver
 
 `pmserver` is a server that listens for text commands and can send and
-receive MIDI data throughPortMidi.
+receive MIDI data throughPortMidi. It works with one input and one output
+device at a time.
 
-It is best used to send and receive sysex messages. You can send any MIDI message
-you want, but it only makes sense for `pmserver` to explicitly receive sysex
-messages because otherwise it won't know when to stop listening.
+It is best used to send and receive sysex messages, or as a MIDI monitor.
+You can send any MIDI message you want, but it only makes sense for
+`pmserver` to explicitly receive sysex messages because otherwise it won't
+know when to stop listening.
 
 `pmserver` listens for commands on `stdin` and writes received sysex
-messages to `stdout` (in response to a read command). Errors are written to
-`stdout` prefixed by the string "# ".
+messages (in response to a read command) or all message (the monitor
+command) to `stdout`. Command error messages are written to `stdout`
+prefixed by the string "# ".
 
 A sample session:
 
