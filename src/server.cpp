@@ -36,7 +36,7 @@ void cleanup() {
   Pm_Terminate();
 }
 
-Server::Server() : input(0), output(0), sysex_state(SYSEX_WAITING) {
+Server::Server() : input(nullptr), output(nullptr), sysex_state(SYSEX_WAITING) {
   Pm_Initialize();
   atexit(cleanup);
 }
@@ -68,24 +68,24 @@ void Server::list_all_devices() {
 }
 
 PmError Server::open_input(int port) {
-  if (input != 0)
+  if (input != nullptr)
     Pm_Close(input);
   return Pm_OpenInput(&input, port, 0, MIDI_BUFSIZ, 0, 0);
 }
 
 PmError Server::open_output(int port) {
-  if (output != 0)
+  if (output != nullptr)
     Pm_Close(output);
   return Pm_OpenOutput(&output, port, 0, 128, 0, 0, 0);
 }
 
 void Server::receive_and_print_sysex_bytes() {
   struct timespec rqtp = {0, SLEEP_NANOSECS};
-  time_t start_time = time(0);
+  time_t start_time = time(nullptr);
 
   sysex_state = SYSEX_WAITING;
   while (sysex_state != SYSEX_DONE) {
-    if (difftime(time(0), start_time) >= WAIT_FOR_SYSEX_TIMEOUT_SECS) {
+    if (difftime(time(nullptr), start_time) >= WAIT_FOR_SYSEX_TIMEOUT_SECS) {
       cerr << "it's been " << WAIT_FOR_SYSEX_TIMEOUT_SECS << " seconds";
       switch (sysex_state) {
       case SYSEX_WAITING:
@@ -101,7 +101,7 @@ void Server::receive_and_print_sysex_bytes() {
     if (Pm_Poll(input) == TRUE)
       read_and_process_sysex();
     else {
-      if (nanosleep(&rqtp, 0) == -1)
+      if (nanosleep(&rqtp, nullptr) == -1)
         return;                 // TODO handle error
     }
   }
@@ -113,7 +113,7 @@ void stop_monitoring(int _sig) {
 
 void Server::monitor_midi() {
   struct timespec rqtp = {0, SLEEP_NANOSECS};
-  time_t start_time = time(0);
+  time_t start_time = time(nullptr);
   struct sigaction action = {stop_monitoring, SIGINT, SA_RESETHAND};
 
   sigaction(SIGINT, &action, nullptr);
@@ -123,7 +123,7 @@ void Server::monitor_midi() {
     if (Pm_Poll(input) == TRUE)
       read_and_process_any_message();
     else {
-      if (nanosleep(&rqtp, 0) == -1)
+      if (nanosleep(&rqtp, nullptr) == -1)
         return;                 // TODO handle error
     }
   }

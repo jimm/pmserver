@@ -25,8 +25,8 @@ public:
   void receive_and_print_sysex_bytes();
   void monitor_midi();
 
-  bool is_input_open() { return input != 0; }
-  bool is_output_open() { return output != 0; }
+  bool is_input_open() { return input != nullptr; }
+  bool is_output_open() { return output != nullptr; }
 
   // only public for testing
   void hex_word_to_bytes(const char * const word, std::vector<byte> &bytes);
