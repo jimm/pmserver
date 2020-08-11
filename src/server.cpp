@@ -38,6 +38,11 @@ void cleanup() {
 
 Server::Server() : input(nullptr), output(nullptr), sysex_state(SYSEX_WAITING) {
   Pm_Initialize();
+
+  // Pm_Initialize(), when it looks for default devices, can set errno to a
+  // non-zero value. Reinitialize it here.
+  errno = 0;
+
   atexit(cleanup);
 }
 
