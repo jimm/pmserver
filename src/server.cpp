@@ -15,6 +15,8 @@
 #define HEX_FILE_NAME_INDICATOR_CHAR '@'
 #define BIN_FILE_NAME_INDICATOR_CHAR '.'
 
+#define is_realtime(b) ((b) >= CLOCK)
+
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -110,6 +112,42 @@ void Server::receive_and_print_sysex_bytes() {
         return;                 // TODO handle error
     }
   }
+}
+
+void Server::receive_and_save_sysex_bytes(const char * const output_path) {
+  struct timespec rqtp = {0, SLEEP_NANOSECS};
+
+  FILE *fp = fopen(output_path, "w");
+  if (fp == nullptr) {
+    perror("error opening output file");
+    return;
+  }
+
+  time_t start_time = time(nullptr);
+  sysex_state = SYSEX_WAITING;
+  while (sysex_state != SYSEX_DONE) {
+    if (difftime(time(nullptr), start_time) >= WAIT_FOR_SYSEX_TIMEOUT_SECS) {
+      cerr << "it's been " << WAIT_FOR_SYSEX_TIMEOUT_SECS << " seconds";
+      switch (sysex_state) {
+      case SYSEX_WAITING:
+        cerr << " and I haven't seen a SYSEX message" << endl;
+        return;
+      case SYSEX_PROCESSING:
+        cerr << " and I'm still getting SYSEX!" << endl;
+        break;
+      default:
+        break;
+      }
+    }
+    if (Pm_Poll(input) == TRUE)
+      read_and_save_sysex(fp);
+    else {
+      if (nanosleep(&rqtp, nullptr) == -1)
+        return;                 // TODO handle error
+    }
+  }
+
+  fclose(fp);
 }
 
 void stop_monitoring(int _sig) {
@@ -371,6 +409,7 @@ void Server::print_sys_common(PmMessage msg) {
   }
 }
 
+// FIXME doesn't do anything with the sysex
 void Server::read_and_process_sysex() {
   PmEvent events[PM_EVENT_BUFSIZ];
 
@@ -380,6 +419,8 @@ void Server::read_and_process_sysex() {
     byte *bp = (byte *)&msg;
     for (int j = 0; j < 4; ++j) {
       byte b = bp[j];
+      if (is_realtime(b))
+        continue;
       if (sysex_state == SYSEX_PROCESSING) {
         if (b == EOX) {
           cout << endl;
@@ -392,6 +433,35 @@ void Server::read_and_process_sysex() {
           cerr << "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte" << endl;
         sysex_state = SYSEX_PROCESSING;
       }
+    }
+  }
+}
+
+void Server::read_and_save_sysex(FILE *fp) {
+  PmEvent events[PM_EVENT_BUFSIZ];
+
+  int num_read = Pm_Read(input, events, PM_EVENT_BUFSIZ);
+  for (int i = 0; i < num_read; ++i) {
+    PmMessage msg = events[i].message;
+    byte *bp = (byte *)&msg;
+    for (int j = 3; j >= 0; ++j) {
+      byte b = bp[j];
+      if (is_realtime(b))
+        continue;
+      if (sysex_state == SYSEX_PROCESSING) {
+        if (b == EOX) {
+          fwrite(&b, 1, 1, fp);
+          sysex_state = SYSEX_DONE;
+          return;
+        }
+      }
+      else if (b == SYSEX) {
+        if (sysex_state != SYSEX_WAITING)
+          cerr << "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte" << endl;
+        sysex_state = SYSEX_PROCESSING;
+      }
+      if (sysex_state == SYSEX_PROCESSING)
+        fwrite(&b, 1, 1, fp);
     }
   }
 }

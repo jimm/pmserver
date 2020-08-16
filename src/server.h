@@ -1,6 +1,7 @@
 #ifndef SERVER_H
 #define SERVER_H
 
+#include <stdio.h>
 #include <vector>
 #include "portmidi.h"
 
@@ -23,6 +24,7 @@ public:
   PmError open_output(int port);
 
   void receive_and_print_sysex_bytes();
+  void receive_and_save_sysex_bytes(const char * const output_path);
   void monitor_midi();
 
   bool is_input_open() { return input != nullptr; }
@@ -42,6 +44,7 @@ protected:
   void send_bin_file_bytes(char *fname);
   void send_hex_bytes(char **words);
   void read_and_process_sysex();
+  void read_and_save_sysex(FILE *fp);
   void read_and_process_any_message();
   void print_note(PmMessage msg, const char * const name);
   void print_three_byte_chan(PmMessage msg, const char * const name);

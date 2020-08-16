@@ -23,8 +23,10 @@ void help() {
        << "open input/output N   Open input or output port" << endl
        << "send file | b [b...]  Send file or bytes to open output; all b must be hex" << endl
        << "receive               Receive and print sysex bytes from open input" << endl
+       << "w outfile             Receive sysex from open input and write to a file" << endl
        << "monitor               Receive and print all MIDI messages from open input" << endl
        << "x file | b [b...]     Send file or bytes, then receive and print" << endl
+       << "f outfile file | b [b...]     Send file or bytes, then receive and save in outfile" << endl
        << "p words...            Print words (good for scripts)" << endl
        << "help                  This help" << endl
        << "quit                  Quit" << endl
@@ -100,6 +102,12 @@ void run(Server &server, struct opts *opts) {
       else
         server.receive_and_print_sysex_bytes();
       break;
+    case 'w':
+      if (!server.is_input_open())
+        cerr << "# please select an input port first" << endl;
+      else
+        server.receive_and_save_sysex_bytes(words[1]);
+      break;
     case 'm':
       if (!server.is_input_open())
         cerr << "# please select an input port first" << endl;
@@ -121,6 +129,14 @@ void run(Server &server, struct opts *opts) {
       else {
         server.send_file_or_bytes(&words[1]);
         server.receive_and_print_sysex_bytes();
+      }
+      break;
+    case 'f':
+      if (!server.is_input_open())
+        cerr << "# please select an inport port" << endl;
+      else {
+        server.send_file_or_bytes(&words[2]);
+        server.receive_and_save_sysex_bytes(words[1]);
       }
       break;
     case 'h': case '?':
