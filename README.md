@@ -61,6 +61,10 @@ one character long then all hex numbers in it must be two hex digits long.
 Receives sysex from the open output and returns it as a string of ASCII hex
 bytes separated by spaces.
 
+## w[rite] file
+
+Receives sysex from the open input and saves it to a file.
+
 ## m[onitor]
 
 Listens for and prints all incoming MIDI messages. This is a superset of the
@@ -74,6 +78,12 @@ bug that I will fix ASAP.)
 Sends either the contents of a file (@ for ASCII hex bytes, . for binary) or
 bytes to the open input, presumed to be a sysex message, and receives and
 prints the reply.
+
+## f outfile @infile | .infile | b[, b...]
+
+Sends either the contents of infile (@ for ASCII hex bytes, . for binary) or
+bytes to the open input, presumed to be a sysex message, and receives and
+saves the reply to outfile.
 
 ## p words...
 
