@@ -37,6 +37,8 @@ protected:
   PortMidiStream *input;
   PortMidiStream *output;
   SysexState sysex_state;
+  size_t sysex_offset;
+  byte sysex_bytes[16];
 
   void list_devices(const char *title, std::vector<PmDeviceInfo *> &devices, bool inputs);
   byte char_to_nibble(const char ch);
@@ -51,6 +53,10 @@ protected:
   void print_two_byte(PmMessage msg, const char * const name);
   void print_four_sysex_bytes(PmMessage msg);
   void print_sys_common(PmMessage msg);
+
+  void print_sysex_byte(byte b);
+  void print_sysex_line();
+  void end_sysex_print();
 };
 
 #endif /* SERVER_H */

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <stdio.h>
 #include <signal.h>
 #include "consts.h"
 #include "portmidi.h"
@@ -365,6 +366,68 @@ void Server::print_four_sysex_bytes(PmMessage msg) {
   }
 }
 
+// FIXME doesn't do anything with the sysex
+void Server::read_and_process_sysex() {
+  PmEvent events[PM_EVENT_BUFSIZ];
+
+  sysex_offset = 0;
+  int num_read = Pm_Read(input, events, PM_EVENT_BUFSIZ);
+  for (int i = 0; i < num_read; ++i) {
+    PmMessage msg = events[i].message;
+    byte *bp = (byte *)&msg;
+    for (int j = 0; j < 4; ++j) {
+      byte b = bp[j];
+      if (is_realtime(b))
+        continue;
+      if (sysex_state == SYSEX_PROCESSING) {
+        if (b == EOX) {
+          print_sysex_byte(b);
+          end_sysex_print();
+          sysex_state = SYSEX_DONE;
+          return;
+        }
+      }
+      else if (b == SYSEX) {
+        if (sysex_state != SYSEX_WAITING)
+          cerr << "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte" << endl;
+        sysex_state = SYSEX_PROCESSING;
+      }
+      if (sysex_state == SYSEX_PROCESSING)
+        print_sysex_byte(b);
+    }
+  }
+}
+
+void Server::read_and_save_sysex(FILE *fp) {
+  PmEvent events[PM_EVENT_BUFSIZ];
+
+  sysex_offset = 0;
+  int num_read = Pm_Read(input, events, PM_EVENT_BUFSIZ);
+  for (int i = 0; i < num_read; ++i) {
+    PmMessage msg = events[i].message;
+    byte *bp = (byte *)&msg;
+    for (int j = 3; j >= 0; ++j) {
+      byte b = bp[j];
+      if (is_realtime(b))
+        continue;
+      if (sysex_state == SYSEX_PROCESSING) {
+        if (b == EOX) {
+          fwrite(&b, 1, 1, fp);
+          sysex_state = SYSEX_DONE;
+          return;
+        }
+      }
+      else if (b == SYSEX) {
+        if (sysex_state != SYSEX_WAITING)
+          cerr << "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte" << endl;
+        sysex_state = SYSEX_PROCESSING;
+      }
+      if (sysex_state == SYSEX_PROCESSING)
+        fwrite(&b, 1, 1, fp);
+    }
+  }
+}
+
 void Server::print_sys_common(PmMessage msg) {
   switch (Pm_MessageStatus(msg)) {
   case SYSEX:
@@ -409,59 +472,34 @@ void Server::print_sys_common(PmMessage msg) {
   }
 }
 
-// FIXME doesn't do anything with the sysex
-void Server::read_and_process_sysex() {
-  PmEvent events[PM_EVENT_BUFSIZ];
-
-  int num_read = Pm_Read(input, events, PM_EVENT_BUFSIZ);
-  for (int i = 0; i < num_read; ++i) {
-    PmMessage msg = events[i].message;
-    byte *bp = (byte *)&msg;
-    for (int j = 0; j < 4; ++j) {
-      byte b = bp[j];
-      if (is_realtime(b))
-        continue;
-      if (sysex_state == SYSEX_PROCESSING) {
-        if (b == EOX) {
-          cout << endl;
-          sysex_state = SYSEX_DONE;
-          return;
-        }
-      }
-      else if (b == SYSEX) {
-        if (sysex_state != SYSEX_WAITING)
-          cerr << "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte" << endl;
-        sysex_state = SYSEX_PROCESSING;
-      }
-    }
-  }
+void Server::print_sysex_byte(byte b) {
+  int line_index = sysex_offset & 0xff;
+  sysex_bytes[line_index] = b;
+  if (line_index == 15)
+    print_sysex_line();
+  ++sysex_offset;
 }
 
-void Server::read_and_save_sysex(FILE *fp) {
-  PmEvent events[PM_EVENT_BUFSIZ];
+void Server::print_sysex_line() {
+  int line_index = sysex_offset & 0xff;
+  if (line_index == 0)
+    return;
 
-  int num_read = Pm_Read(input, events, PM_EVENT_BUFSIZ);
-  for (int i = 0; i < num_read; ++i) {
-    PmMessage msg = events[i].message;
-    byte *bp = (byte *)&msg;
-    for (int j = 3; j >= 0; ++j) {
-      byte b = bp[j];
-      if (is_realtime(b))
-        continue;
-      if (sysex_state == SYSEX_PROCESSING) {
-        if (b == EOX) {
-          fwrite(&b, 1, 1, fp);
-          sysex_state = SYSEX_DONE;
-          return;
-        }
-      }
-      else if (b == SYSEX) {
-        if (sysex_state != SYSEX_WAITING)
-          cerr << "Hmm, something odd here: state is not WAITING but I just saw my first SYSEX byte" << endl;
-        sysex_state = SYSEX_PROCESSING;
-      }
-      if (sysex_state == SYSEX_PROCESSING)
-        fwrite(&b, 1, 1, fp);
-    }
+  size_t line_start = sysex_offset - line_index;
+  size_t offset;
+  int i;
+
+  printf("%08lx:", line_start);
+  for (offset = line_start, i = 0; offset <= sysex_offset; ++offset, ++i)
+    printf("%s %02x", i == 8 ? "  " : "", sysex_bytes[i]);
+  printf("  ");
+  for (offset = line_start, i = 0; offset <= sysex_offset; ++offset, ++i) {
+    byte b = sysex_bytes[i];
+    printf("%s %02x", i == 8 ? "  " : "", (b >= 32 && b <= 127) ? b : '.');
   }
+  printf("\n");
+}
+
+void Server::end_sysex_print() {
+  print_sysex_line();
 }
