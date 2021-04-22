@@ -2,6 +2,10 @@ NAME = pmserver
 CPPFLAGS += -std=c++11
 LIBS = -lc -lc++ -lportmidi
 LDFLAGS += $(LIBS)
+ifeq($(UNAME), Darwin)
+CC = clang
+CXX = clang++
+endif
 
 prefix = /usr/local
 exec_prefix = $(prefix)
@@ -17,7 +21,7 @@ TEST_OBJ_FILTERS = src/$(NAME).o
 all: $(NAME)
 
 $(NAME): $(OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^
+	$(CXX) $(LDFLAGS) -o $@ $^
 
 -include $(C_SRC:%.c=%.d)
 -include $(CPP_SRC:%.cpp=%.d)
@@ -26,7 +30,7 @@ test: $(NAME)_test
 	./$(NAME)_test
 
 $(NAME)_test:	$(OBJS) $(TEST_OBJS)
-	$(LD) $(LDFLAGS) -o $@ $(filter-out $(TEST_OBJ_FILTERS),$^)
+	$(CXX) $(LDFLAGS) -o $@ $(filter-out $(TEST_OBJ_FILTERS),$^)
 
 install:	$(bindir)/$(NAME)
 
