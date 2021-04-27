@@ -1,8 +1,8 @@
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
-#include "pmserver_test.h"
 #include "../src/server.h"
 
 #define CATCH_CONFIG_MAIN
@@ -10,6 +10,8 @@
 
 #define CATCH_CATEGORY "[hex]"
 
+using std::cerr;
+using std::endl;
 using std::vector;
 
 // ================ pmserver tests ================
@@ -55,6 +57,6 @@ TEST_CASE("hex word to bytes", CATCH_CATEGORY) {
   bytes[2] = 0x0a;
   hex_word_test("1234", bytes, 2);
 
-  fprintf(stderr, "expect to see an error message here about odd # digits\n");
+  cerr << "expect to see an error message here about odd # digits" << endl;
   hex_word_test("1234a", bytes, 2);
 }
