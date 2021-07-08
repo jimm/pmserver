@@ -23,10 +23,11 @@ $ pmserver
 > list
 ...list of input and output devices...
 > open input 1
-> send 1 90 64 127    # note on
-> send 1 80 64 127    # note off
-> send 1 f0 42 30 68 37 0d 0 f7 # set list bank digest request
-> receive 1
+> open output 5
+> send 90 64 127    # note on
+> send 80 64 127    # note off
+> send f0 42 30 68 37 0d 0 f7 # set list bank digest request
+> receive
 f0 42 30 68 38 0d 0 ...23 bytes... f7
 > quit
 ```
@@ -35,7 +36,7 @@ f0 42 30 68 38 0d 0 ...23 bytes... f7
 
 All commands and subcommands can be abbreviated to one character.
 
-All lists of bytes
+All lists of bytes are displayed in hexadecimal.
 
 ## l[ist]
 
@@ -53,7 +54,7 @@ Opens output port number N.
 
 Sends either the contents of a file (@ for ASCII hex bytes, . for binary) or
 bytes to the open input. Byte values `b` are in hex. Bytes can be strung
-together with our without spaces between them. If a byte string is more than
+together with ou without spaces between them. If a byte string is more than
 one character long then all hex numbers in it must be two hex digits long.
 
 ## r[eceive]

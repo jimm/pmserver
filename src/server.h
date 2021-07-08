@@ -45,6 +45,7 @@ protected:
   void send_hex_file_bytes(char *fname);
   void send_bin_file_bytes(char *fname);
   void send_hex_bytes(char **words);
+  void send_bytes(std::vector<byte> &bytes);
   void read_and_process_sysex();
   void read_and_save_sysex(FILE *fp);
   void read_and_process_any_message();

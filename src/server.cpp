@@ -231,8 +231,8 @@ void Server::send_hex_file_bytes(char *fname) {
       hex_word_to_bytes(words[i], bytes);
     }
   }
-  Pm_WriteSysEx(output, 0, bytes.data());
   fclose(fp);
+  send_bytes(bytes);
 }
 
 void Server::send_bin_file_bytes(char *fname) {
@@ -246,17 +246,50 @@ void Server::send_bin_file_bytes(char *fname) {
     for (int j = 0; j < num_read; ++j)
       bytes.push_back(buf[j]);
   }
-  Pm_WriteSysEx(output, 0, bytes.data());
   fclose(fp);
+  send_bytes(bytes);
 }
 
+// Assumes data is not malformed!
 void Server::send_hex_bytes(char **words) {
   vector<byte> bytes;
-  int i;
-
-  for (i = 0; words[i]; ++i)
+  for (int i = 0; words[i]; ++i)
     hex_word_to_bytes(words[i], bytes);
-  Pm_WriteSysEx(output, 0, bytes.data());
+  send_bytes(bytes);
+}
+
+void Server::send_bytes(vector<byte> &bytes) {
+  for (int i = 0; i < bytes.size(); ++i) {
+    byte byte = bytes[i];
+    switch (byte & 0xf0) {
+    case NOTE_OFF: case NOTE_ON: case POLY_PRESSURE: case CONTROLLER:
+    case PROGRAM_CHANGE: case CHANNEL_PRESSURE: case PITCH_BEND:
+    case SONG_POINTER:
+      Pm_WriteShort(output, 0, Pm_Message(byte, bytes[i+1], bytes[i+2]));
+      i += 2;
+      break;
+    case SONG_SELECT:
+      Pm_WriteShort(output, 0, Pm_Message(byte, bytes[i+1], 0));
+      ++i;
+      break;
+    case TUNE_REQUEST: case CLOCK: case START: case CONTINUE: case STOP:
+    case SYSTEM_RESET:
+      Pm_WriteShort(output, 0, Pm_Message(byte, 0, 0));
+      break;
+    case 0xf0:
+      Pm_WriteSysEx(output, 0, &bytes[i]);
+      while (bytes[i] != EOX && i < bytes.size())
+        ++i;
+      if (bytes[i] == EOX)
+        --i;
+      break;
+    case ACTIVE_SENSE:
+      break;
+    default:
+      cout << "??? status '" << setw(2) << hex << (int)byte << '\'' << endl;
+      break;
+    }
+  }
 }
 
 void Server::send_file_or_bytes(char **words) {

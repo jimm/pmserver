@@ -91,7 +91,7 @@ void run(Server &server, struct opts *opts) {
       }
       break;
     case 's':
-      if (!server.is_output_open() == 0)
+      if (!server.is_output_open())
         cerr << "# please select an output port first" << endl;
       else
         server.send_file_or_bytes(&words[1]);
