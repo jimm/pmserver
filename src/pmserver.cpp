@@ -125,7 +125,7 @@ void run(Server &server, struct opts *opts) {
       break;
     case 'x':
       if (!server.is_input_open() || !server.is_output_open())
-        cerr << "# please select output and inport ports first" << endl;
+        cerr << "# please select output and input ports first" << endl;
       else {
         server.send_file_or_bytes(&words[1]);
         server.receive_and_print_sysex_bytes();
@@ -144,6 +144,9 @@ void run(Server &server, struct opts *opts) {
       break;
     case 'q':
       return;
+    case '#':
+      // comment, ignore
+      break;
     default:
       if (cmd != 0)
         cerr << "# unknown command " << words[0] << ", type 'h' for help" << endl;

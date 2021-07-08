@@ -280,8 +280,6 @@ void Server::send_bytes(vector<byte> &bytes) {
       Pm_WriteSysEx(output, 0, &bytes[i]);
       while (bytes[i] != EOX && i < bytes.size())
         ++i;
-      if (bytes[i] == EOX)
-        --i;
       break;
     case ACTIVE_SENSE:
       break;
@@ -506,7 +504,7 @@ void Server::print_sys_common(PmMessage msg) {
 }
 
 void Server::print_sysex_byte(byte b) {
-  int line_index = sysex_offset & 0xff;
+  int line_index = sysex_offset & 0x0f;
   sysex_bytes[line_index] = b;
   if (line_index == 15)
     print_sysex_line();
@@ -514,7 +512,7 @@ void Server::print_sysex_byte(byte b) {
 }
 
 void Server::print_sysex_line() {
-  int line_index = sysex_offset & 0xff;
+  int line_index = sysex_offset & 0x0f;
   if (line_index == 0)
     return;
 
@@ -523,12 +521,14 @@ void Server::print_sysex_line() {
   int i;
 
   printf("%08lx:", line_start);
-  for (offset = line_start, i = 0; offset <= sysex_offset; ++offset, ++i)
-    printf("%s %02x", i == 8 ? "  " : "", sysex_bytes[i]);
-  printf("  ");
-  for (offset = line_start, i = 0; offset <= sysex_offset; ++offset, ++i) {
+  for (offset = line_start, i = 0; offset < sysex_offset; ++offset, ++i) {
     byte b = sysex_bytes[i];
-    printf("%s %02x", i == 8 ? "  " : "", (b >= 32 && b <= 127) ? b : '.');
+    printf("%s %02x", i == 8 ? "  " : "", b);
+  }
+  printf("  ");
+  for (offset = line_start, i = 0; offset < sysex_offset; ++offset, ++i) {
+    byte b = sysex_bytes[i];
+    printf("%s%c", i == 8 ? "  " : "", (b >= 32 && b <= 127) ? b : '.');
   }
   printf("\n");
 }
