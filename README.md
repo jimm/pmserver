@@ -1,7 +1,7 @@
 # pmserver
 
 `pmserver` is a server that listens for text commands and can send and
-receive MIDI data throughPortMidi. It works with one input and one output
+receive MIDI data through PortMidi. It works with one input and one output
 device at a time.
 
 It is best used to send and receive sysex messages, or as a MIDI monitor.
@@ -54,8 +54,8 @@ Opens output port number N.
 
 Sends either the contents of a file (@ for ASCII hex bytes, . for binary) or
 bytes to the open input. Byte values `b` are in hex. Bytes can be strung
-together with ou without spaces between them. If a byte string is more than
-one character long then all hex numbers in it must be two hex digits long.
+together without spaces between them. If a byte string is more than one
+character long then all hex numbers in it must be two hex digits long.
 
 ## r[eceive]
 
@@ -102,7 +102,7 @@ Only one input and output can be open at a time.
 $ ./pmserver <<EOS
 o i 1
 o o 3
-p request for set list digest
+p request for Kronos set list digest
 x f0 42 30 68 37 0d 0 f7
 q
 EOS
