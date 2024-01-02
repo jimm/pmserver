@@ -1,6 +1,6 @@
 NAME = pmserver
-CPPFLAGS += -std=c++11
-LIBS = -lc -lc++ -lportmidi
+CPPFLAGS += -std=c++14
+LIBS = -lportmidi
 LDFLAGS += $(LIBS)
 
 prefix = /usr/local
@@ -12,6 +12,8 @@ OBJS = $(SRC:%.cpp=%.o)
 TEST_SRC = $(wildcard test/*.cpp)
 TEST_OBJS = $(TEST_SRC:%.cpp=%.o)
 TEST_OBJ_FILTERS = src/$(NAME).o
+TEST_LIBS = $(LIBS) -lCatch2Main -lCatch2
+
 
 .PHONY: all test install uninstall tags clean distclean
 all: $(NAME)
@@ -26,7 +28,7 @@ test: $(NAME)_test
 	./$(NAME)_test
 
 $(NAME)_test:	$(OBJS) $(TEST_OBJS)
-	$(CXX) $(LDFLAGS) -o $@ $(filter-out $(TEST_OBJ_FILTERS),$^)
+	$(CXX) $(LDFLAGS) $(TEST_LIBS) -o $@ $(filter-out $(TEST_OBJ_FILTERS),$^)
 
 install:	$(bindir)/$(NAME)
 

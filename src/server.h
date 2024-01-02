@@ -20,8 +20,8 @@ public:
   void list_all_devices();
   void send_file_or_bytes(char **words);
 
-  PmError open_input(int port);
-  PmError open_output(int port);
+  PmError open_input(const char *port_num_or_name);
+  PmError open_output(const char *port_num_or_name);
 
   void receive_and_print_sysex_bytes();
   void receive_and_save_sysex_bytes(const char * const output_path);
@@ -41,6 +41,7 @@ protected:
   byte sysex_bytes[16];
 
   void list_devices(const char *title, std::vector<PmDeviceInfo *> &devices, bool inputs);
+  int port_number_matching_name(const char *name, bool match_inputs);
   byte char_to_nibble(const char ch);
   void send_hex_file_bytes(char *fname);
   void send_bin_file_bytes(char *fname);

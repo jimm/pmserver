@@ -3,10 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <catch2/catch_all.hpp>
 #include "../src/server.h"
-
-#define CATCH_CONFIG_MAIN
-#include "catch.hpp"
 
 #define CATCH_CATEGORY "[hex]"
 

@@ -14,8 +14,8 @@ using std::flush;
 
 struct opts {
   bool list_devices;
-  int input_port;
-  int output_port;
+  char input_port[BUFSIZ];
+  char output_port[BUFSIZ];
 } opts;
 
 void help() {
@@ -38,12 +38,12 @@ void run(Server &server, struct opts *opts) {
   char line[LINE_BUFSIZ],  *words[MAX_WORDS];
   int err;
 
-  if (opts->input_port >= 0) {
+  if (opts->input_port[0] != 0) {
     err = server.open_input(opts->input_port);
     if (err != 0)
       cerr << "# error opening input port " << opts->input_port << endl;
   }
-  if (opts->output_port >= 0) {
+  if (opts->output_port[0] != 0) {
     err = server.open_output(opts->output_port);
     if (err != 0)
       cerr << "# error opening input port " << opts->output_port << endl;
@@ -64,8 +64,8 @@ void run(Server &server, struct opts *opts) {
     split_line_into_words(line, words);
 
     // dispatch action based on first character of first word
-    int port;
     char cmd = words[0][0];
+    std::string str;
     switch (cmd) {
     case 'l':
       server.list_all_devices();
@@ -75,14 +75,25 @@ void run(Server &server, struct opts *opts) {
         cerr <<  "# open input/output N" << endl;
         break;
       }
-      port = atoi(words[2]);
       switch (words[1][0]) {
       case 'o':
-        err = server.open_output(port);
+        str = std::string(words[2]);
+        for (int i = 3; words[0] != 0; ++i) {
+          str += ' ';
+          str += words[i];
+          i += 1;
+        }
+        err = server.open_output(str.c_str());
         // TODO check error
         break;
       case 'i':
-        err = server.open_input(port);
+        str = std::string(words[2]);
+        for (int i = 3; words[0] != 0; ++i) {
+          str += ' ';
+          str += words[i];
+          i += 1;
+        }
+        err = server.open_input(str.c_str());
         // TODO check error
         break;
       default:
@@ -182,17 +193,17 @@ void parse_command_line(int argc, char * const *argv, struct opts *opts) {
   };
 
   opts->list_devices = false;
-  opts->input_port = opts->output_port = -1;
+  opts->input_port[0] = opts->output_port[0] = 0;
   while ((ch = getopt_long(argc, argv, "li:o:h", longopts, 0)) != -1) {
     switch (ch) {
     case 'l':
       opts->list_devices = true;
       break;
     case 'i':
-      opts->input_port = atoi(optarg);
+      strncpy(opts->input_port, optarg, BUFSIZ);
       break;
     case 'o':
-      opts->output_port = atoi(optarg);
+      strncpy(opts->output_port, optarg, BUFSIZ);
       break;
     case 'h': default:
       usage(argv[0]);

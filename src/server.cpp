@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <ctype.h>
 #include <stdio.h>
 #include <signal.h>
 #include "consts.h"
@@ -15,6 +16,7 @@
 #define SLEEP_NANOSECS 10000000L
 #define HEX_FILE_NAME_INDICATOR_CHAR '@'
 #define BIN_FILE_NAME_INDICATOR_CHAR '.'
+#define UNDEFINED_PORT -1
 
 #define is_realtime(b) ((b) >= CLOCK)
 
@@ -75,16 +77,43 @@ void Server::list_all_devices() {
   list_devices("Outputs", devices, false);
 }
 
-PmError Server::open_input(int port) {
+PmError Server::open_input(const char *port_num_or_name) {
   if (input != nullptr)
     Pm_Close(input);
+
+  int port;
+  if (isdigit(port_num_or_name[0]))
+    port = atoi(port_num_or_name);
+  else
+    port = port_number_matching_name(port_num_or_name, true);
   return Pm_OpenInput(&input, port, 0, MIDI_BUFSIZ, 0, 0);
 }
 
-PmError Server::open_output(int port) {
+PmError Server::open_output(const char *port_num_or_name) {
   if (output != nullptr)
     Pm_Close(output);
+
+  int port;
+  if (isdigit(port_num_or_name[0]))
+    port = atoi(port_num_or_name);
+  else
+    port = port_number_matching_name(port_num_or_name, false);
   return Pm_OpenOutput(&output, port, 0, 128, 0, 0, 0);
+}
+
+int Server::port_number_matching_name(const char *name, bool match_inputs) {
+  vector<PmDeviceInfo *>devices;
+  int num_devices = Pm_CountDevices();
+
+  for (int i = 0; i < num_devices; ++i) {
+    PmDeviceInfo * const device = (PmDeviceInfo * const)Pm_GetDeviceInfo(i);
+    if ((match_inputs && !device->input) || (!match_inputs && !device->output))
+      continue;
+
+    if (strncasecmp(name, device->name, BUFSIZ) == 0)
+      return i;
+  }
+  return UNDEFINED_PORT;
 }
 
 void Server::receive_and_print_sysex_bytes() {
@@ -356,7 +385,7 @@ void Server::read_and_process_any_message() {
 void note_num_to_name(int num, char *buf) {
   int oct = (num / 12) - 1;
   const char *note = NOTE_NAMES[num % 12];
-  sprintf(buf, "%s%d", note, oct);
+  snprintf(buf, 4, "%s%d", note, oct);
 }
 
 void Server::print_note(PmMessage msg, const char * const name) {
