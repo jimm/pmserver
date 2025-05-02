@@ -1,3 +1,4 @@
 pmserver
 pmserver_test
 *.o
+*.d
